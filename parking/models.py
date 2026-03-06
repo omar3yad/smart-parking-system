@@ -56,4 +56,3 @@ class Reservation(models.Model):
 
     def __str__(self):
         return f"Res {self.reservation_code} for {self.user.username}"
-

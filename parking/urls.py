@@ -3,11 +3,15 @@ from .views import VehicleEntryAPIView
 from .views import VehicleExitAPIView
 from .views import BulkSlotUpdateAPIView
 from .views import ParkingStatusAPIView
-
+from .views import ParkingSlotListAPIView
+from .views import CreateReservationAPIView
 
 urlpatterns = [
     path('api/entry/', VehicleEntryAPIView.as_view(), name='vehicle-entry'),
     path('api/exit/', VehicleExitAPIView.as_view(), name='vehicle-exit'),
     path('api/slots/update/', BulkSlotUpdateAPIView.as_view(), name='bulk-slot-update'),
+    
     path('api/status/summary/', ParkingStatusAPIView.as_view(), name='parking-summary'),
+    path('api/slots/', ParkingSlotListAPIView.as_view(), name='slot-list-mobile'),
+    path('api/reserve/', CreateReservationAPIView.as_view(), name='create-reservation'),
 ]

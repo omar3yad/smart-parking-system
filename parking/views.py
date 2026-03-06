@@ -1,17 +1,19 @@
-from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework import permissions
 from rest_framework import status
 
-from django.utils import timezone
+from .serializers import VehicleEntrySerializer, VehicleExitSerializer, SlotDisplaySerializer # تأكد من إضافة الـ Exit هنا لو موجودة
+from .permissions import IsCameraNode, IsOwnerOrAdmin, IsCameraNode
+from .models import ParkingSlot, VehicleLog, Reservation
 from django.db.models import Count
+from django.utils import timezone
 from decimal import Decimal
 
-from .serializers import VehicleEntrySerializer, VehicleExitSerializer # تأكد من إضافة الـ Exit هنا لو موجودة
-from .models import VehicleLog  # تأكد أن اسم الموديل عندك هو VehicleLog
-from .models import ParkingSlot
-
-
 class VehicleEntryAPIView(APIView):
+    permission_classes = [IsCameraNode]
     """
     هذا الـ Endpoint مخصص لكاميرا الدخول فقط.
     يستقبل صورة ورقم اللوحة ويقوم بفتح سجل جديد.
@@ -33,6 +35,7 @@ class VehicleEntryAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class VehicleExitAPIView(APIView):
+    permission_classes = [IsCameraNode]
     def post(self, request):
         serializer = VehicleExitSerializer(data=request.data)
         if serializer.is_valid():
@@ -54,7 +57,7 @@ class VehicleExitAPIView(APIView):
             hours = Decimal(duration.total_seconds() / 3600).quantize(Decimal('1.00'))
             if hours < 1: hours = 1 # الحد الأدنى ساعة
             
-            log.total_fee = hours * Decimal(10.00) 
+            log.total_fee = hours * Decimal(25.00) 
             log.is_paid = True # نفترض الدفع عند المخرج حالياً
             log.save()
 
@@ -69,10 +72,11 @@ class VehicleExitAPIView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class BulkSlotUpdateAPIView(APIView):
+    permission_classes = [IsCameraNode]
     """
     هذا الـ API يستقبل بيانات من كاميرات الـ Slots الـ 6.
     كل كاميرا تبعت لستة بالـ slots اللي هي شايفاها وحالتهم.
-    """
+    """ 
     def post(self, request):
         # نتوقع استقبال List من الأماكن
         data = request.data # مثال: [{"slot_id": "A1", "is_occupied": True}, ...]
@@ -101,6 +105,7 @@ class BulkSlotUpdateAPIView(APIView):
         })
 
 class ParkingStatusAPIView(APIView):
+    permission_classes = [permissions.IsAdminUser]
     """
     هذا الـ API يعطي ملخص كامل لحالة الجراج:
     العدد الكلي، المتاح، المشغول، والمحجوز.
@@ -127,3 +132,49 @@ class ParkingStatusAPIView(APIView):
                 summary['reserved'] = item['total']
         
         return Response(summary)
+
+class ParkingSlotListAPIView(ListAPIView):
+    """
+    هذا الـ API يخدم تطبيق الموبايل.
+    يعرض قائمة بكل الـ Slots مع إمكانية الفلترة حسب الحالة أو النوع.
+    """
+    serializer_class = SlotDisplaySerializer
+
+    def get_queryset(self):
+        queryset = ParkingSlot.objects.all().order_by('slot_number')
+        
+        # إمكانية الفلترة: /api/slots/?status=available
+        status_param = self.request.query_params.get('status')
+        type_param = self.request.query_params.get('type')
+
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+        if type_param:
+            queryset = queryset.filter(slot_type=type_param)
+            
+        return queryset
+
+class CreateReservationAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    def post(self, request):
+        serializer = ReservationSerializer(data=request.data)
+        if serializer.is_valid():
+            slot = serializer.validated_data['slot']
+            
+            # 1. إنشاء الحجز وتوليد كود عشوائي
+            reservation = serializer.save(
+                user=request.user, # يفترض أن المستخدم مسجل دخول
+                reservation_code=str(uuid.uuid4())[:8].upper()
+            )
+            
+            # 2. تغيير حالة الـ Slot فوراً إلى محجوز
+            slot.status = 'reserved'
+            slot.save()
+            
+            return Response({
+                "message": "تم الحجز بنجاح. يرجى الوصول خلال ساعة.",
+                "reservation_code": reservation.reservation_code,
+                "slot": slot.slot_number
+            }, status=status.HTTP_201_CREATED)
+            
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

@@ -80,9 +80,9 @@ WSGI_APPLICATION = 'core.wsgi.application'
 DATABASES = {
     'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': 'smart_parking_db',      # اسم الداتا بيز اللي عملناها
-            'USER': 'postgres',        # اسم المستخدم
-            'PASSWORD': '1234',    # الباسورد اللي اخترته
+            'NAME': 'smart_parking_db',   
+            'USER': 'postgres',    
+            'PASSWORD': '1234',    
             'HOST': '127.0.0.1',            # لأنها على جهازك حالياً
             'PORT': '5432',                 # بورت البوستجرس الافتراضي
     }
@@ -107,7 +107,14 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated', # هذا سيغلق كل الـ APIs ويجعلها تتطلب Token
+    ),
+}
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
